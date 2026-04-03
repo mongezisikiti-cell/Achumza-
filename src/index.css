@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-primary: #0f172a;
+  --color-secondary: #3b82f6;
+  --color-accent: #f59e0b;
+  --color-surface: #ffffff;
+  --color-background: #f8fafc;
+  --color-muted: #64748b;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-primary font-sans antialiased;
+  }
+}
+
+.hero-visual {
+  background: radial-gradient(circle at 50% 50%, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
+}
+
+.topic-card {
+  @apply bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-secondary/20 transition-all cursor-pointer;
+}
+
+.status-badge {
+  @apply inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary/10 text-secondary text-xs font-medium mb-6;
+}
+
+.status-dot {
+  @apply w-2 h-2 rounded-full bg-secondary animate-pulse;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center px-8 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-slate-800 transition-colors;
+}
+
+.agent-panel {
+  @apply fixed bottom-6 right-6 w-96 h-[600px] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden z-50;
+}
+
+.chat-messages {
+  @apply flex-1 overflow-y-auto p-4 space-y-4;
+}
+
+.message {
+  @apply max-w-[85%] p-3 rounded-2xl text-sm;
+}
+
+.message.ai {
+  @apply bg-slate-100 text-slate-800 self-start rounded-tl-none;
+}
+
+.message.user {
+  @apply bg-secondary text-white self-end rounded-tr-none;
+}
+
+.markdown-body {
+  @apply text-sm leading-relaxed;
+}
+
+.markdown-body p {
+  @apply mb-2 last:mb-0;
+}
+
+.markdown-body ul, .markdown-body ol {
+  @apply ml-4 mb-2;
+}
+
+.markdown-body li {
+  @apply mb-1;
+}
+
+.markdown-body code {
+  @apply bg-slate-200 px-1 rounded text-xs font-mono;
+}
