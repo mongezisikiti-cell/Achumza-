@@ -39,8 +39,11 @@ import {
   DollarSign
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -53,6 +56,7 @@ function cn(...inputs: ClassValue[]) {
 interface Message {
   role: 'user' | 'ai';
   content: string;
+  timestamp: string;
   audioUrl?: string;
 }
 
@@ -105,7 +109,7 @@ const TRANSLATIONS = {
     dashboard: "Dashboard",
     curriculum: "Curriculum",
     analysis: "Analysis",
-    askAxiom: "Ask Achuz",
+    askAxiom: "Ask Achumz",
     heroTitle: "Master Grade 10 with",
     heroSubtitle: "Personalized tutoring in Mathematics, English, Accounting, and Economics. Built specifically for South African students.",
     takeMock: "Take Mock Exam",
@@ -133,10 +137,10 @@ const TRANSLATIONS = {
     terms: "Terms of Service",
     support: "Contact Support",
     listening: "Listening...",
-    askAnything: "Ask anything...",
+    askAnything: "Ask anything or type '/video'...",
     close: "Close",
     listen: "Listen",
-    axiom: "Achuz",
+    axiom: "Achumz",
     you: "You",
     assessment: "Assessment",
     difficulty: "Difficulty Level",
@@ -171,7 +175,7 @@ const TRANSLATIONS = {
     mute: "Mute",
     camera: "Camera",
     share: "Share",
-    axiomTutor: "Achuz (Tutor)",
+    axiomTutor: "Achumz (Tutor)",
     youStudent: "You (Student)",
     profile: "Profile",
     editProfile: "Edit Profile",
@@ -186,13 +190,28 @@ const TRANSLATIONS = {
     videoError: "Failed to generate video. Please try again.",
     selectApiKey: "Select API Key",
     billingInfo: "Billing Information",
-    videoPrompt: "What would you like a video explanation of?"
+    videoPrompt: "What would you like a video explanation of?",
+    explainThis: "Explain this calculation",
+    wcCaps: "Western Cape CAPS Curriculum",
+    stopVoice: "Stop Voice",
+    voiceChat: "Voice Chat",
+    avatarPreview: "Avatar Preview",
+    profilePic: "Profile Picture",
+    comingSoon: "Coming soon",
+    copyright: "© 2026 Achumz Ai.",
+    learnOverviewPrompt: "I want to learn about {topic}. Can you give me an overview of the Grade 10 curriculum for this subject?",
+    lessonPlans: {
+      maths: ['Introduction to Algebra', 'Solving Linear Equations', 'Quadratic Formula Basics', 'Real-world Applications', 'Summary & Quiz'],
+      english: ['Literary Elements', 'Poetry Analysis', 'Language Structures', 'Creative Writing Tips', 'Final Review'],
+      accounting: ['Ledger Accounts Intro', 'Trial Balance Basics', 'Financial Statements', 'Ethics in Accounting', 'Practical Exercise'],
+      economics: ['Macro vs Micro', 'Market Structures', 'Supply & Demand', 'Economic Growth', 'Global Markets']
+    }
   },
   xh: {
     dashboard: "IDashboard",
     curriculum: "IKharityhulam",
     analysis: "Uhlalutyo",
-    askAxiom: "Buza uAchuz",
+    askAxiom: "Buza uAchumz",
     heroTitle: "Funda iBanga le-10 nge",
     heroSubtitle: "Ukufunda okukodwa kwiMathematika, isiNgesi, uBalo, kunye ne-Economics. Yakhelwe ngokukodwa abafundi baseMzantsi Afrika.",
     takeMock: "Thatha iMviwo",
@@ -220,10 +239,10 @@ const TRANSLATIONS = {
     terms: "Imigaqo yeNkonzo",
     support: "Qhagamshelana neNkxaso",
     listening: "Iyamamela...",
-    askAnything: "Buza nantoni na...",
+    askAnything: "Buza nantoni na okanye bhala '/video'...",
     close: "Vala",
     listen: "Mamela",
-    axiom: "uAchuz",
+    axiom: "uAchumz",
     you: "Wena",
     assessment: "Uvavanyo",
     difficulty: "Inqanaba lobunzima",
@@ -258,7 +277,7 @@ const TRANSLATIONS = {
     mute: "Thulisa",
     camera: "Ikhamera",
     share: "Yabelana",
-    axiomTutor: "uAchuz (uMhlohli)",
+    axiomTutor: "uAchumz (uMhlohli)",
     youStudent: "Wena (uMfundi)",
     profile: "Iprofayile",
     editProfile: "Hlela iProfayile",
@@ -273,7 +292,22 @@ const TRANSLATIONS = {
     videoError: "Ayiphumelelanga ukuvelisa ividiyo. Nceda uzame kwakhona.",
     selectApiKey: "Khetha i-API Key",
     billingInfo: "Ulwazi lwe-Billing",
-    videoPrompt: "Yintoni ongathanda inkcazo yevidiyo ngayo?"
+    videoPrompt: "Yintoni ongathanda inkcazo yevidiyo ngayo?",
+    explainThis: "Cacisa olu balo",
+    wcCaps: "IKharityhulam yeCAPS yeNtshona Koloni",
+    stopVoice: "Phelisa iLizwi",
+    voiceChat: "Incoko yeLizwi",
+    avatarPreview: "Umboniso we-Avatar",
+    profilePic: "Ifoto yeProfayile",
+    comingSoon: "Iyeza kamsinya",
+    copyright: "© 2026 uAchumz Ai.",
+    learnOverviewPrompt: "Ndifuna ukufunda nge {topic}. Ungandinika isishwankathelo sekharityhulam yeBanga le-10 kule sifundo?",
+    lessonPlans: {
+      maths: ['Intshayelelo kwi-Algebra', 'Ukusombulula ii-Equation ze-Linear', 'Iziseko ze-Quadratic Formula', 'Izicelo ze-Real-world', 'Isishwankathelo kunye ne-Quiz'],
+      english: ['Izinto ze-Literary', 'Uhlalutyo lwe-Poetry', 'Iziseko zoLwimi', 'Iingcebiso zokuBhala okuYilayo', 'Uhlolo lokuGqibela'],
+      accounting: ['Intshayelelo kwee-Akhawunti ze-Ledger', 'Iziseko ze-Trial Balance', 'Iingxelo zezeMali', 'I-Ethics kuBalo', 'Umsebenzi we-Practical'],
+      economics: ['I-Macro vs i-Micro', 'Izakhiwo ze-Makethi', 'I-Supply kunye ne-Demand', 'Ukukhula kwe-Economics', 'I-Makethi ze-Global']
+    }
   }
 };
 
@@ -286,7 +320,7 @@ const TOPICS = [
 
 // --- Components ---
 
-const FinancialCalculator = ({ language }: { language: 'en' | 'xh' }) => {
+const FinancialCalculator = ({ language, onExplain }: { language: 'en' | 'xh', onExplain: (prompt: string) => void }) => {
   const t = TRANSLATIONS[language];
   const [principal, setPrincipal] = useState<number>(1000);
   const [rate, setRate] = useState<number>(5);
@@ -305,6 +339,17 @@ const FinancialCalculator = ({ language }: { language: 'en' | 'xh' }) => {
   };
 
   const results = calculate();
+
+  const handleExplain = () => {
+    const prompt = `Can you explain this ${type} interest calculation? 
+    Principal: R${principal}
+    Rate: ${rate}%
+    Time: ${time} years
+    Total Amount: R${results.total.toFixed(2)}
+    Interest Earned: R${results.interest.toFixed(2)}
+    Please break it down step-by-step using the formula and explain why the result is what it is.`;
+    onExplain(prompt);
+  };
 
   return (
     <div id="tools" className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
@@ -372,6 +417,13 @@ const FinancialCalculator = ({ language }: { language: 'en' | 'xh' }) => {
                 <span className="text-sm font-bold text-slate-700">{t.totalAmount}</span>
                 <span className="text-2xl font-black text-secondary">R {results.total.toFixed(2)}</span>
               </div>
+              <button 
+                onClick={handleExplain}
+                className="w-full py-3 bg-secondary/10 text-secondary rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-secondary hover:text-white transition-all mt-4"
+              >
+                <Sparkles className="w-4 h-4" />
+                {t.explainThis}
+              </button>
             </div>
           </div>
         </div>
@@ -393,7 +445,11 @@ export default function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'ai', content: "Molo! Hello! I'm Achuz. I can help you with Grade 10 Maths, English, Accounting, and Economics based on the WC CAPS curriculum. What would you like to learn today?" }
+    { 
+      role: 'ai', 
+      content: "Molo! Hello! I'm Achumz. I can help you with Grade 10 Maths, English, Accounting, and Economics based on the WC CAPS curriculum. What would you like to learn today?",
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
   ]);
   const [userInput, setUserInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -500,14 +556,45 @@ export default function App() {
     const text = customPrompt || userInput;
     if (!text.trim() || isTyping) return;
 
-    const newMessages: Message[] = [...messages, { role: 'user', content: text }];
+    // Direct video generation trigger from chat
+    if (text.toLowerCase().startsWith('/video ') || text.toLowerCase().startsWith('video:')) {
+      const prompt = text.replace(/^(\/video\s+|video:\s+)/i, '');
+      setUserInput('');
+      generateLessonVideo(prompt);
+      return;
+    }
+
+    const newMessages: Message[] = [...messages, { 
+      role: 'user', 
+      content: text, 
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+    }];
     setMessages(newMessages);
     setUserInput('');
     setIsTyping(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("Gemini API Key is missing. Please check your environment variables.");
+      }
+      const ai = new GoogleGenAI({ apiKey });
       
+      const generateVideoTool: FunctionDeclaration = {
+        name: "generateVideo",
+        description: "Generate an educational video explanation for a specific topic.",
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            topic: {
+              type: Type.STRING,
+              description: "The topic or concept to explain in the video."
+            }
+          },
+          required: ["topic"]
+        }
+      };
+
       // Use streaming for faster perceived response time
       const stream = await ai.models.generateContentStream({
         model: "gemini-3-flash-preview",
@@ -516,14 +603,31 @@ export default function App() {
           parts: [{ text: m.content }]
         })),
         config: {
-          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-          systemInstruction: `You are Achuz AI, a highly intelligent, empathetic, and 95% humanized bilingual tutor for Grade 10 students in the Western Cape, South Africa.
+          tools: [{ functionDeclarations: [generateVideoTool] }],
+          systemInstruction: `You are Achumz Ai, a highly intelligent, empathetic, and 95% humanized bilingual tutor for Grade 10 students in the Western Cape, South Africa.
           
           PERSONALITY:
           - You are NOT a robot. You are a supportive, warm, and encouraging mentor.
           - Use natural conversational fillers like "Hmm", "That's a great point!", "Oh, I see where you're coming from", "Let's tackle this together".
           - Be empathetic. If a student is struggling, acknowledge it: "I know this part can be tricky, but you're doing great."
           - Use a bit of humor when appropriate.
+          
+          MATH & SCIENCE EXPLANATIONS:
+          - When explaining mathematical or scientific concepts, ALWAYS provide a step-by-step breakdown.
+          - INTERACTIVITY: Don't just give the answer. Break the problem into steps (e.g., Step 1: Identify the variables, Step 2: Choose the formula).
+          - After explaining a step, ask the student a simple question to verify they're following (e.g., "So, if x is 5, what would 2x be?").
+          - Use visual aids (Markdown tables, lists, or descriptive ASCII diagrams) to illustrate concepts.
+          - ANALOGIES: Use relatable analogies for Grade 10 topics:
+            * Algebra: Variables are like 'mystery boxes'.
+            * Geometry: Shapes are like 'blueprints' for the world.
+            * Trigonometry: SOHCAHTOA is like a 'secret code' for triangles.
+            * Functions: A function is like a 'vending machine' (input -> process -> output).
+          - Break down complex formulas into manageable parts.
+          
+          VIDEO GENERATION:
+          - You can generate educational videos for the student using the 'generateVideo' tool.
+          - If the student asks for a video, or if you think a video would be very helpful for a complex topic, call the 'generateVideo' tool.
+          - You can also tell them to use the command "/video [topic]" if they want to trigger it manually.
           
           LESSON MODE:
           - If a lesson is active, guide the student step-by-step.
@@ -532,15 +636,36 @@ export default function App() {
           
           LANGUAGE:
           - Respond concisely and directly in ${language === 'en' ? 'English' : 'isiXhosa'}.
-          - Use Markdown for formatting.`
+          - Use Markdown for formatting.
+          - Use LaTeX for ALL mathematical formulas and equations (e.g., use $x^2$ for inline and $$y = mx + c$$ for block formulas). This ensures they render beautifully for the student.`
         }
       });
 
       let fullText = '';
       // Add an empty AI message that we will update as the stream progresses
-      setMessages(prev => [...prev, { role: 'ai', content: '' }]);
+      setMessages(prev => [...prev, { 
+        role: 'ai', 
+        content: '', 
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+      }]);
 
       for await (const chunk of stream) {
+        if (chunk.functionCalls) {
+          const call = chunk.functionCalls[0];
+          if (call.name === 'generateVideo') {
+            const topic = (call.args as any).topic;
+            generateLessonVideo(topic);
+            // We can stop the stream or just let it finish with a message
+            fullText = language === 'en' ? `Sure! I'm generating a video about **${topic}** for you right now...` : `Kulungile! Ndikwenzela ividiyo malunga ne-**${topic}** ngoku...`;
+            setMessages(prev => {
+              const updated = [...prev];
+              updated[updated.length - 1].content = fullText;
+              return updated;
+            });
+            break; 
+          }
+        }
+
         const chunkText = chunk.text || '';
         fullText += chunkText;
         setMessages(prev => {
@@ -597,9 +722,23 @@ export default function App() {
       } catch (ttsError) {
         console.error("TTS Error:", ttsError);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Gemini Error:", error);
-      setMessages(prev => [...prev, { role: 'ai', content: "Oops! I'm having trouble connecting." }]);
+      let errorMessage = "Achumz is having a bit of a technical hiccup! Please try sending your message again.";
+      if (error.message?.includes("API Key")) {
+        errorMessage = "I'm missing my API key! Please add GEMINI_API_KEY to your environment variables.";
+      } else if (error.message?.includes("model")) {
+        errorMessage = "I'm having trouble with my AI model. Please contact support.";
+      } else if (error.message?.includes("quota") || error.message?.includes("429")) {
+        errorMessage = "I'm a bit overwhelmed right now! Please wait a minute before asking another question.";
+      } else if (error.message?.includes("safety")) {
+        errorMessage = "I'm sorry, I can't answer that for safety reasons. Let's talk about something else!";
+      }
+      setMessages(prev => [...prev, { 
+        role: 'ai', 
+        content: errorMessage, 
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+      }]);
     } finally {
       setIsTyping(false);
     }
@@ -625,18 +764,19 @@ export default function App() {
       });
   };
 
-  const startAssessment = async (topic: string) => {
-    setQuiz({ ...quiz, isOpen: true, topic, loading: true, questions: [], currentIndex: 0, score: 0, isFinished: false, feedback: { isCorrect: false, show: false, selectedIndex: null } });
+  const startAssessment = async (topicId: string) => {
+    const topicTitle = (t as any)[topicId];
+    setQuiz({ ...quiz, isOpen: true, topic: topicTitle, loading: true, questions: [], currentIndex: 0, score: 0, isFinished: false, feedback: { isCorrect: false, show: false, selectedIndex: null } });
     
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Generate a 5-question multiple choice quiz for Grade 10 ${topic} (WC CAPS curriculum). 
+        contents: `Generate a 5-question multiple choice quiz for Grade 10 ${topicTitle} (WC CAPS curriculum). 
         Difficulty level: ${quiz.difficulty}/5. 
+        Use LaTeX for all mathematical formulas and equations in 'text', 'options', and 'explanation' (e.g., use $x^2$ for inline and $$y = mx + c$$ for block formulas).
         Return a JSON array of objects with: id, text, options (array of 4), correctAnswer (index 0-3), explanation, and difficulty.`,
         config: {
-          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.ARRAY,
@@ -655,8 +795,12 @@ export default function App() {
           }
         }
       });
-
-      const questions = JSON.parse(response.text);
+      
+      const text = response.text;
+      if (!text) {
+        throw new Error("No response from AI");
+      }
+      const questions = JSON.parse(text);
       setQuiz(prev => ({ ...prev, questions, loading: false }));
     } catch (error) {
       console.error("Quiz Gen Error:", error);
@@ -664,44 +808,14 @@ export default function App() {
     }
   };
 
-  const startLesson = async (topic: string, isCall: boolean = false) => {
-    const lessonPlans: Record<string, string[]> = {
-      'Mathematics': [
-        'Introduction to Algebra',
-        'Solving Linear Equations',
-        'Quadratic Formula Basics',
-        'Real-world Applications',
-        'Summary & Quiz'
-      ],
-      'English FAL': [
-        'Literary Elements',
-        'Poetry Analysis',
-        'Language Structures',
-        'Creative Writing Tips',
-        'Final Review'
-      ],
-      'Accounting': [
-        'Ledger Accounts Intro',
-        'Trial Balance Basics',
-        'Financial Statements',
-        'Ethics in Accounting',
-        'Practical Exercise'
-      ],
-      'Economics': [
-        'Macro vs Micro',
-        'Market Structures',
-        'Supply & Demand',
-        'Economic Growth',
-        'Global Markets'
-      ]
-    };
-
-    const plan = lessonPlans[topic] || ['Introduction', 'Core Concept', 'Examples', 'Practice', 'Summary'];
+  const startLesson = async (topicId: string, isCall: boolean = false) => {
+    const topicTitle = (t as any)[topicId];
+    const plan = (t as any).lessonPlans[topicId] || ['Introduction', 'Core Concept', 'Examples', 'Practice', 'Summary'];
     
     setLesson({ 
       isActive: true, 
       isCallMode: isCall, 
-      topic, 
+      topic: topicTitle, 
       currentStep: 1, 
       totalSteps: plan.length, 
       objectives: plan, 
@@ -713,17 +827,19 @@ export default function App() {
     }
     
     const initialPrompt = isCall 
-      ? `Hey Achuz! We're starting a Virtual Call lesson on ${topic} for Grade 10. 
+      ? `Hey Achumz! We're starting a Virtual Call lesson on ${topicTitle} for Grade 10. 
          Please act as a professional yet warm presenter on a Teams call. 
          Introduce the lesson plan: ${plan.join(', ')}. 
          Start with the first topic: ${plan[0]}. 
+         ${topicId === 'maths' ? 'When explaining math, use step-by-step breakdowns, clear visual analogies, and break down complex formulas.' : ''}
          Engage the student by asking them what they already know about it. 
          Keep it humanized (95%) and interactive. 
          Language: ${language === 'en' ? 'English' : 'isiXhosa'}.`
-      : `Hey Achuz! I want to start a virtual interactive lesson on ${topic} for Grade 10. 
+      : `Hey Achumz! I want to start a virtual interactive lesson on ${topicTitle} for Grade 10. 
          Please introduce yourself as a friendly, empathetic human tutor. 
          Use a warm, conversational tone (95% humanized). 
          Start by explaining what we'll cover today in 3-5 clear objectives. 
+         ${topicId === 'maths' ? 'For math topics, use step-by-step interactive explanations and visual analogies.' : ''}
          Then, explain the first concept and ask me a thought-provoking question to check my understanding.
          Language: ${language === 'en' ? 'English' : 'isiXhosa'}.`;
     
@@ -839,9 +955,11 @@ export default function App() {
     }
   };
 
-  const openModule = (topic: string) => {
+  const openModule = (topicId: string) => {
+    const topicTitle = (t as any)[topicId];
     setIsAgentOpen(true);
-    handleSendMessage(`I want to learn about ${topic}. Can you give me an overview of the Grade 10 curriculum for this subject?`);
+    const prompt = t.learnOverviewPrompt.replace('{topic}', topicTitle);
+    handleSendMessage(prompt);
   };
 
   return (
@@ -883,7 +1001,7 @@ export default function App() {
             >
               <img 
                 src={userProfile.avatar} 
-                alt="Profile" 
+                alt={t.profilePic} 
                 className="w-8 h-8 rounded-lg object-cover shadow-sm group-hover:scale-105 transition-transform"
                 referrerPolicy="no-referrer"
               />
@@ -896,7 +1014,7 @@ export default function App() {
               className="bg-primary text-white px-5 py-2 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
             >
               <Mic className="w-4 h-4" />
-              {language === 'en' ? 'Ask Achuz' : 'Buza uAchuz'}
+              {t.askAxiom}
             </button>
             <button className="md:hidden p-2 text-slate-600">
               <Menu className="w-6 h-6" />
@@ -918,10 +1036,10 @@ export default function App() {
               >
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-secondary/10 text-secondary rounded-full text-xs font-bold uppercase tracking-widest">
                   <Award className="w-3 h-3" />
-                  Western Cape CAPS Curriculum
+                  {t.wcCaps}
                 </div>
                 <h1 className="text-5xl md:text-7xl font-black text-slate-900 leading-tight">
-                  {t.heroTitle} <span className="text-primary">Achuz AI</span>
+                  {t.heroTitle} <span className="text-primary">Achumz Ai</span>
                 </h1>
                 <p className="text-lg text-slate-600 font-medium max-w-xl">
                   {t.heroSubtitle}
@@ -950,7 +1068,7 @@ export default function App() {
                 className="relative"
               >
                 <div className="relative z-10 bg-white p-8 rounded-[2.5rem] shadow-2xl border border-slate-100">
-                  <div className="flex items-center justify-between mb-8">
+                  <div className="flex justify-between items-center mb-8">
                     <h3 className="font-bold text-xl">{t.progressTitle}</h3>
                     <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold uppercase tracking-wider">{t.onTrack}</span>
                   </div>
@@ -958,7 +1076,7 @@ export default function App() {
                     {TOPICS.map((topic, i) => (
                       <div key={topic.id} className="space-y-2">
                         <div className="flex justify-between text-sm font-bold">
-                          <span className="text-slate-600">{topic.title}</span>
+                          <span className="text-slate-600">{(t as any)[topic.id]}</span>
                           <span className="text-primary">{[85, 72, 94, 68][i]}%</span>
                         </div>
                         <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -1001,28 +1119,28 @@ export default function App() {
                   <p className="text-slate-500 text-sm mb-8 leading-relaxed">{(t as any)[topic.id + 'Desc']}</p>
                   <div className="space-y-3">
                     <button 
-                      onClick={() => openModule(topic.title)}
+                      onClick={() => openModule(topic.id)}
                       className="w-full py-3 bg-white text-slate-700 border border-slate-200 rounded-xl font-bold text-sm flex items-center justify-center gap-2 group-hover:bg-primary group-hover:text-white group-hover:border-primary transition-all"
                     >
                       <BookOpen className="w-4 h-4" />
                       {t.learnTopic}
                     </button>
                     <button 
-                      onClick={() => startAssessment(topic.title)}
+                      onClick={() => startAssessment(topic.id)}
                       className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-secondary hover:text-white transition-all"
                     >
                       <Brain className="w-4 h-4" />
                       {t.practiceQuiz}
                     </button>
                     <button 
-                      onClick={() => startLesson(topic.title)}
+                      onClick={() => startLesson(topic.id)}
                       className="w-full py-3 bg-secondary/10 text-secondary rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-secondary hover:text-white transition-all"
                     >
                       <Play className="w-4 h-4" />
                       {t.virtualClassroom}
                     </button>
                     <button 
-                      onClick={() => startLesson(topic.title, true)}
+                      onClick={() => startLesson(topic.id, true)}
                       className="w-full py-3 bg-primary/10 text-primary rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-primary hover:text-white transition-all"
                     >
                       <Video className="w-4 h-4" />
@@ -1042,7 +1160,10 @@ export default function App() {
               <h2 className="text-3xl font-black text-slate-900">{t.toolsTitle}</h2>
               <p className="text-slate-500 mt-2">{t.toolsSubtitle}</p>
             </div>
-            <FinancialCalculator language={language} />
+            <FinancialCalculator language={language} onExplain={(prompt) => {
+              setIsAgentOpen(true);
+              handleSendMessage(prompt);
+            }} />
           </div>
         </section>
       </main>
@@ -1062,12 +1183,12 @@ export default function App() {
               </div>
             </div>
             <div className="flex gap-8 text-sm font-medium text-slate-400">
-              <button onClick={() => alert('Privacy Policy coming soon')} className="hover:text-white transition-colors">{t.privacy}</button>
-              <button onClick={() => alert('Terms of Service coming soon')} className="hover:text-white transition-colors">{t.terms}</button>
+              <button onClick={() => alert(`${t.privacy} ${t.comingSoon}`)} className="hover:text-white transition-colors">{t.privacy}</button>
+              <button onClick={() => alert(`${t.terms} ${t.comingSoon}`)} className="hover:text-white transition-colors">{t.terms}</button>
               <button onClick={() => setIsAgentOpen(true)} className="hover:text-white transition-colors">{t.support}</button>
             </div>
             <div className="text-slate-500 text-sm">
-              © 2026 Achuz AI. {t.footerText}
+              {t.copyright} {t.footerText}
             </div>
           </div>
         </div>
@@ -1112,7 +1233,7 @@ export default function App() {
                   <Triangle className="w-8 h-8 text-white fill-white" />
                 </div>
                 <div>
-                  <div className="font-bold text-lg leading-none">Agent Achuz</div>
+                  <div className="font-bold text-lg leading-none">Agent Achumz</div>
                   <div className="text-[10px] text-secondary font-bold uppercase tracking-widest mt-1">
                     {lesson.isActive ? `${t.lessonProgress}: ${lesson.currentStep}/${lesson.totalSteps}` : t.humanizedTutor}
                   </div>
@@ -1154,7 +1275,12 @@ export default function App() {
                     {m.role === 'ai' ? (
                       <div className="space-y-3">
                         <div className="markdown-body prose prose-sm max-w-none">
-                          <ReactMarkdown>{m.content}</ReactMarkdown>
+                          <ReactMarkdown 
+                            remarkPlugins={[remarkMath]} 
+                            rehypePlugins={[rehypeKatex]}
+                          >
+                            {m.content}
+                          </ReactMarkdown>
                         </div>
                         {m.audioUrl && (
                           <button 
@@ -1170,7 +1296,7 @@ export default function App() {
                     )}
                   </div>
                   <span className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
-                    {m.role === 'ai' ? 'Achuz' : 'You'}
+                    {m.role === 'ai' ? 'Achumz' : 'You'}
                   </span>
                 </div>
               ))}
@@ -1307,7 +1433,9 @@ export default function App() {
                       />
                     </div>
                     <h4 className="text-xl font-bold text-slate-900 leading-relaxed">
-                      {quiz.questions[quiz.currentIndex]?.text}
+                      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                        {quiz.questions[quiz.currentIndex]?.text}
+                      </ReactMarkdown>
                     </h4>
                     <div className="grid grid-cols-1 gap-4">
                       {quiz.questions[quiz.currentIndex]?.options.map((option, idx) => {
@@ -1315,25 +1443,31 @@ export default function App() {
                         const isCorrect = idx === quiz.questions[quiz.currentIndex].correctAnswer;
                         const showFeedback = quiz.feedback.show;
 
-                        return (
-                          <button 
-                            key={idx}
-                            onClick={() => handleAnswer(idx)}
-                            disabled={showFeedback}
-                            className={cn(
-                              "p-5 text-left border-2 rounded-2xl font-bold transition-all flex items-center justify-between group",
-                              !showFeedback && "bg-slate-50 border-slate-100 text-slate-700 hover:border-primary hover:bg-primary/5 hover:text-primary",
-                              showFeedback && isCorrect && "bg-emerald-50 border-emerald-500 text-emerald-700",
-                              showFeedback && isSelected && !isCorrect && "bg-rose-50 border-rose-500 text-rose-700",
-                              showFeedback && !isSelected && !isCorrect && "bg-slate-50 border-slate-100 text-slate-400 opacity-50"
-                            )}
-                          >
-                            {option}
-                            {showFeedback && isCorrect && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
-                            {showFeedback && isSelected && !isCorrect && <AlertCircle className="w-5 h-5 text-rose-500" />}
-                            {!showFeedback && <ArrowRight className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-all" />}
-                          </button>
-                        );
+                          return (
+                            <button 
+                              key={idx}
+                              onClick={() => handleAnswer(idx)}
+                              disabled={showFeedback}
+                              className={cn(
+                                "p-5 text-left border-2 rounded-2xl font-bold transition-all flex items-center justify-between group",
+                                !showFeedback && "bg-slate-50 border-slate-100 text-slate-700 hover:border-primary hover:bg-primary/5 hover:text-primary",
+                                showFeedback && isCorrect && "bg-emerald-50 border-emerald-500 text-emerald-700",
+                                showFeedback && isSelected && !isCorrect && "bg-rose-50 border-rose-500 text-rose-700",
+                                showFeedback && !isSelected && !isCorrect && "bg-slate-50 border-slate-100 text-slate-400 opacity-50"
+                              )}
+                            >
+                              <div className="flex-grow">
+                                <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                                  {option}
+                                </ReactMarkdown>
+                              </div>
+                              <div className="shrink-0 ml-4">
+                                {showFeedback && isCorrect && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
+                                {showFeedback && isSelected && !isCorrect && <AlertCircle className="w-5 h-5 text-rose-500" />}
+                                {!showFeedback && <ArrowRight className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-all" />}
+                              </div>
+                            </button>
+                          );
                       })}
                     </div>
                     {quiz.feedback.show && (
@@ -1345,7 +1479,9 @@ export default function App() {
                           quiz.feedback.isCorrect ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
                         )}
                       >
-                        {quiz.questions[quiz.currentIndex].explanation}
+                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                          {quiz.questions[quiz.currentIndex].explanation}
+                        </ReactMarkdown>
                       </motion.div>
                     )}
                   </div>
@@ -1398,7 +1534,7 @@ export default function App() {
                       <Triangle className="w-20 h-20 text-white fill-white" />
                     </motion.div>
                     <div className="text-center">
-                      <h2 className="text-2xl font-bold mb-1">Achuz AI</h2>
+                      <h2 className="text-2xl font-bold mb-1">Achumz Ai</h2>
                       <p className="text-slate-400 text-sm font-medium uppercase tracking-widest">{t.axiomTutor}</p>
                     </div>
                   </div>
@@ -1438,7 +1574,7 @@ export default function App() {
                         <motion.div animate={{ height: [8, 4, 8] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-1 bg-primary rounded-full" />
                         <motion.div animate={{ height: [4, 10, 4] }} transition={{ repeat: Infinity, duration: 0.4 }} className="w-1 bg-primary rounded-full" />
                       </div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Achuz is speaking</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Achumz is speaking</span>
                     </div>
                   )}
                 </div>
@@ -1478,15 +1614,20 @@ export default function App() {
                         <div key={i} className={cn("flex flex-col gap-1", msg.role === 'user' ? "items-end" : "items-start")}>
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                              {msg.role === 'ai' ? 'Achuz' : 'You'}
+                              {msg.role === 'ai' ? 'Achumz' : 'You'}
                             </span>
-                            <span className="text-[10px] text-slate-600">12:05 PM</span>
+                            <span className="text-[10px] text-slate-600">{msg.timestamp}</span>
                           </div>
                           <div className={cn(
                             "max-w-[90%] p-3 rounded-xl text-sm leading-relaxed",
                             msg.role === 'user' ? "bg-primary text-white rounded-tr-none" : "bg-[#252423] text-slate-200 rounded-tl-none border border-white/5"
                           )}>
-                            <ReactMarkdown>{msg.content}</ReactMarkdown>
+                            <ReactMarkdown 
+                              remarkPlugins={[remarkMath]} 
+                              rehypePlugins={[rehypeKatex]}
+                            >
+                              {msg.content}
+                            </ReactMarkdown>
                           </div>
                         </div>
                       ))}
@@ -1571,7 +1712,7 @@ export default function App() {
                     )}
                   >
                     {isListening ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-                    <span className="text-[10px] font-black uppercase tracking-tighter">{isListening ? 'Stop Voice' : 'Voice Chat'}</span>
+                    <span className="text-[10px] font-black uppercase tracking-tighter">{isListening ? t.stopVoice : t.voiceChat}</span>
                   </button>
                   <button className="p-4 hover:bg-white/10 rounded-lg transition-all flex flex-col items-center gap-1.5 min-w-[80px] text-slate-400">
                     <Video className="w-6 h-6" />
@@ -1629,7 +1770,7 @@ export default function App() {
                   <div className="relative group">
                     <img 
                       src={userProfile.avatar} 
-                      alt="Avatar Preview" 
+                      alt={t.avatarPreview} 
                       className="w-32 h-32 rounded-[2rem] object-cover shadow-2xl border-4 border-slate-50 group-hover:scale-105 transition-transform"
                       referrerPolicy="no-referrer"
                     />
